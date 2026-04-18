@@ -1,17 +1,21 @@
-import pytorch_lightning as pl
-import torch
+import os
+import hydra
+from datetime import datetime
+from omegaconf import OmegaConf
 
-torch.set_float32_matmul_precision('medium')
-from pytorch_lightning.loggers import WandbLogger
+import torch
 from torch.utils.data import DataLoader
+
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint  # Import ModelCheckpoint
+
 from models import build_model
 from datasets import build_dataset
 from utils.utils import set_seed, find_latest_checkpoint
-from pytorch_lightning.callbacks import ModelCheckpoint  # Import ModelCheckpoint
-import hydra
-from omegaconf import OmegaConf
-import os
 
+date_time_now = datetime.now().strftime("%Y-%m-%d_%H-%M")
+torch.set_float32_matmul_precision('medium')
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def train(cfg):
@@ -49,7 +53,7 @@ def train(cfg):
 
     trainer = pl.Trainer(
         max_epochs=cfg.method.max_epochs,
-        logger=None if cfg.debug else WandbLogger(project="unitraj", name=cfg.exp_name, id=cfg.exp_name),
+        logger=None if cfg.debug else WandbLogger(project="unitraj", name=cfg.exp_name, id=f"{cfg.exp_name}_{date_time_now}"),
         devices=1 if cfg.debug else cfg.devices,
         gradient_clip_val=cfg.method.grad_clip_norm,
         accelerator="cpu" if cfg.debug else "gpu",
