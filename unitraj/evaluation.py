@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import torch
+from pathlib import Path
 
 torch.set_float32_matmul_precision('medium')
 from pytorch_lightning.loggers import WandbLogger
@@ -17,6 +18,8 @@ def evaluation(cfg):
     OmegaConf.set_struct(cfg, False)  # Open the struct
     cfg = OmegaConf.merge(cfg, cfg.method)
     cfg['eval'] = True
+    exp_dir = Path(cfg.exp_dir)
+    exp_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg)
 
@@ -30,7 +33,12 @@ def evaluation(cfg):
 
     trainer = pl.Trainer(
         inference_mode=True,
-        logger=None if cfg.debug else WandbLogger(project="unitraj", name=cfg.exp_name),
+        logger=None if cfg.debug else WandbLogger(
+            project="unitraj",
+            name=cfg.exp_name,
+            save_dir=str(exp_dir),
+        ),
+        default_root_dir=str(exp_dir),
         devices=1,
         accelerator="cpu" if cfg.debug else "gpu",
         profiler="simple",

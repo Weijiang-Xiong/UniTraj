@@ -1,5 +1,8 @@
 # exp setting
-exp_name: 'test' # name that will be used in wandb
+exp_name: 'test' # name that will be used in wandb and the experiment folder
+output_root: '../scratch/' # root folder for experiment artifacts
+exp_dir: '${output_root}/${exp_name}' # canonical folder for this experiment
+checkpoint_dir: '${exp_dir}/checkpoints' # checkpoint folder inside the experiment root
 ckpt_path: null # checkpoint path, used for evaluation
 seed: 42 # random seed
 debug: True # debug mode, will use cpu only
@@ -32,3 +35,13 @@ eval_argoverse2: False # whether to evaluate with argoverse evaluation tool
 
 defaults:
   - method: autobot
+
+hydra:
+  run:
+    dir: ${exp_dir}/hydra/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${exp_dir}/hydra_multirun
+    subdir: ${hydra.job.num}
+  output_subdir: .hydra
+  job:
+    chdir: False

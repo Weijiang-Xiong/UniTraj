@@ -1,6 +1,7 @@
 import os
 import hydra
 from datetime import datetime
+from pathlib import Path
 from omegaconf import OmegaConf
 
 import torch
@@ -22,6 +23,10 @@ def train(cfg):
     set_seed(cfg.seed)
     OmegaConf.set_struct(cfg, False)  # Open the struct
     cfg = OmegaConf.merge(cfg, cfg.method)
+    exp_dir = Path(cfg.exp_dir)
+    checkpoint_dir = Path(cfg.checkpoint_dir)
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(cfg)
 
@@ -36,9 +41,10 @@ def train(cfg):
     checkpoint_callback = ModelCheckpoint(
         monitor='val/brier_fde',  # Replace with your validation metric
         filename='{epoch}-{val/brier_fde:.2f}',
+        auto_insert_metric_name=False,
         save_top_k=1,
         mode='min',  # 'min' for loss/error, 'max' for accuracy
-        dirpath=f'./unitraj_ckpt/{cfg.exp_name}'
+        dirpath=str(checkpoint_dir)
     )
 
     call_backs.append(checkpoint_callback)
@@ -53,19 +59,25 @@ def train(cfg):
 
     trainer = pl.Trainer(
         max_epochs=cfg.method.max_epochs,
-        logger=None if cfg.debug else WandbLogger(project="unitraj", name=cfg.exp_name, id=f"{cfg.exp_name}_{date_time_now}"),
+        logger=None if cfg.debug else WandbLogger(
+            project="unitraj",
+            name=cfg.exp_name,
+            id=f"{cfg.exp_name}_{date_time_now}",
+            save_dir=str(exp_dir),
+        ),
+        default_root_dir=str(exp_dir),
         devices=1 if cfg.debug else cfg.devices,
         gradient_clip_val=cfg.method.grad_clip_norm,
         accelerator="cpu" if cfg.debug else "gpu",
         profiler="simple",
         strategy="auto" if cfg.debug else "ddp",
-        callbacks=call_backs
+        callbacks=call_backs,
+        enable_progress_bar=True if os.environ.get("SLURM_JOB_ID") is None else False,  # Disable progress bar in SLURM environment
     )
 
     # automatically resume training
     if cfg.ckpt_path is None and not cfg.debug:
-        # Pattern to match all .ckpt files in the base_path recursively
-        search_pattern = os.path.join('./unitraj', cfg.exp_name, '**', '*.ckpt')
+        search_pattern = str(checkpoint_dir / '**' / '*.ckpt')
         cfg.ckpt_path = find_latest_checkpoint(search_pattern)
 
     trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=cfg.ckpt_path)

@@ -4,6 +4,9 @@ torch.set_float32_matmul_precision('medium')
 from torch.utils.data import DataLoader
 from datasets import build_dataset
 from datasets.common_utils import trajectory_correspondance
+import json
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -25,6 +28,8 @@ def data_analysis(cfg):
         collate_fn=train_set.collate_fn)
 
     wandb.init(project="unitraj", name=cfg.exp_name)
+    output_dir = Path(cfg.exp_dir) / "analysis_outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
     type_results = {}
     kalman_results = {}
     vehicle_sum = 0
@@ -62,6 +67,7 @@ def data_analysis(cfg):
             kalman_results[dataset_name].append(kalman_diffs_for_this_dataset)
     count_dict = {'vehicle': vehicle_sum, 'pedestrian': pedestrian_sum, 'cyclist': cyclist_sum}
     count_df = pd.DataFrame([count_dict], columns=list(count_dict.keys()))
+    count_df.to_csv(output_dir / "object_type_counts.csv", index=False)
     wandb.log({"Count of each type": wandb.Table(dataframe=count_df)})
 
     for dataset_name in kalman_results:
@@ -83,12 +89,15 @@ def data_analysis(cfg):
         counts, _ = np.histogram(kalman_diffs, bins=global_bins)
         bar_data[dataset_name] = counts / counts.sum() * 100  # Convert to percentage
 
+    bar_data.index.name = 'Value Range'
+    bar_data_for_plot = bar_data.reset_index()
+    bar_data_for_plot.to_csv(output_dir / "kalman_difficulty_percentages.csv", index=False)
+
     # Melt the DataFrame for consistency with the other chart
-    melted_data = bar_data.reset_index().melt(id_vars='index', var_name='Dataset', value_name='Count')
-    melted_data.rename(columns={'index': 'Value Range'}, inplace=True)
+    melted_data = bar_data_for_plot.melt(id_vars='Value Range', var_name='Dataset', value_name='Count')
 
     # Create a grouped bar chart
-    plt.figure(figsize=(12, 7))
+    kalman_fig = plt.figure(figsize=(12, 7))
     sns.barplot(x='Value Range', y='Count', hue='Dataset', data=melted_data, palette="viridis", edgecolor='black')
 
     # Customize the plot aesthetics
@@ -97,10 +106,12 @@ def data_analysis(cfg):
     plt.title('Kalman Difficulty Comparison (Percentage)', fontsize=16)
     plt.xticks(rotation=45)
     plt.legend(title='Dataset')
-    wandb.log({f"Kalman Difficulty for {dataset_name}": wandb.Image(plt)})
+    kalman_fig.tight_layout()
+    kalman_fig.savefig(output_dir / "kalman_difficulty_comparison.png", bbox_inches='tight')
+    wandb.log({f"Kalman Difficulty for {dataset_name}": wandb.Image(kalman_fig)})
 
     # Clear the figure
-    plt.clf()
+    plt.close(kalman_fig)
 
     # Prepare a DataFrame to store the percentages
     all_data_percentage = pd.DataFrame()
@@ -122,15 +133,22 @@ def data_analysis(cfg):
             all_data_percentage = all_data_percentage.merge(df[['Trajectory Type', f'{dataset_name}']],
                                                             on='Trajectory Type', how='outer')
 
+    with (output_dir / "trajectory_type_counts.json").open("w") as fp:
+        json.dump({
+            str(dataset_name): {str(traj_type): int(count) for traj_type, count in type_counts.items()}
+            for dataset_name, type_counts in type_results.items()
+        }, fp, indent=2)
+
     # Replace NaN values with 0
     all_data_percentage.fillna(0, inplace=True)
+    all_data_percentage.to_csv(output_dir / "trajectory_type_percentages.csv", index=False)
 
     # Melt the DataFrame to long format for seaborn
     melted_data_percentage = all_data_percentage.melt(id_vars='Trajectory Type', var_name='Dataset',
                                                       value_name='Percentage')
 
     # Create a grouped bar chart
-    plt.figure(figsize=(12, 8))
+    trajectory_fig = plt.figure(figsize=(12, 8))
     sns.barplot(x='Trajectory Type', y='Percentage', hue='Dataset', data=melted_data_percentage, palette="viridis",
                 edgecolor='black')
 
@@ -141,10 +159,12 @@ def data_analysis(cfg):
     plt.xticks(rotation=45)
     plt.legend(title='Dataset')
 
-    wandb.log({f"Trajectory Types for {dataset_name}": wandb.Image(plt)})
+    trajectory_fig.tight_layout()
+    trajectory_fig.savefig(output_dir / "trajectory_types_comparison.png", bbox_inches='tight')
+    wandb.log({f"Trajectory Types for {dataset_name}": wandb.Image(trajectory_fig)})
 
     # Clear the figure after logging
-    plt.clf()
+    plt.close(trajectory_fig)
 
 
 if __name__ == '__main__':
