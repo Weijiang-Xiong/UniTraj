@@ -8,7 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=80G
+#SBATCH --mem-per-cpu=5800
 #SBATCH --cpus-per-task=16
 
 module load gcc/13.2.0 cuda/12.4.1
