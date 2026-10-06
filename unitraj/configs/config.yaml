@@ -3,7 +3,8 @@ exp_name: 'test' # name that will be used in wandb and the experiment folder
 output_root: '../scratch/' # root folder for experiment artifacts
 exp_dir: '${output_root}/${exp_name}' # canonical folder for this experiment
 checkpoint_dir: '${exp_dir}/checkpoints' # checkpoint folder inside the experiment root
-ckpt_path: null # checkpoint path, used for evaluation
+ckpt_path: null # checkpoint path, used for evaluation or resuming training
+init_ckpt_path: null # model weights for fine-tuning with a fresh optimizer and epoch counter
 seed: 42 # random seed
 debug: True # debug mode, will use cpu only
 devices: [ 0 ] # gpu ids
@@ -35,6 +36,7 @@ eval_argoverse2: False # whether to evaluate with argoverse evaluation tool
 
 defaults:
   - method: autobot
+  - _self_
 
 hydra:
   run:

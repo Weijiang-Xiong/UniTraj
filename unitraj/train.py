@@ -67,7 +67,16 @@ def train(cfg):
     exp_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+    if cfg.init_ckpt_path is not None and cfg.ckpt_path is not None:
+        raise ValueError('Use init_ckpt_path for fine-tuning or ckpt_path for resuming, not both.')
+
     model = build_model(cfg)
+    if cfg.init_ckpt_path is not None:
+        # Transfer model weights while keeping the new run's optimizer and schedule.
+        checkpoint = torch.load(cfg.init_ckpt_path, map_location='cpu', weights_only=False)
+        model.load_state_dict(checkpoint['state_dict'], strict=True)
+        del checkpoint
+        print(f'Initialized model weights from {cfg.init_ckpt_path}', flush=True)
 
     train_set = build_dataset(cfg)
     val_set = build_dataset(cfg, val=True)
@@ -117,7 +126,7 @@ def train(cfg):
     )
 
     # automatically resume training
-    if cfg.ckpt_path is None and not cfg.debug:
+    if cfg.ckpt_path is None and cfg.init_ckpt_path is None and not cfg.debug:
         search_pattern = str(checkpoint_dir / '**' / '*.ckpt')
         cfg.ckpt_path = find_latest_checkpoint(search_pattern)
 
